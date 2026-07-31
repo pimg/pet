@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	bf := bloomfilter.New()
+	bf := bloomfilter.New((1024 / 8), 7)
 	bf.Set("test")
 	bf.Set("test2")
 	bf.Set("test")

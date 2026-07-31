@@ -6,8 +6,11 @@ import (
 	"testing"
 )
 
+const filterSize = 1024 / 8 // temp divide by 8 to have consistent test results when implementing bit packing
+const kSize = 7
+
 func Test_EmptyFalsePositive(t *testing.T) {
-	bf := New()
+	bf := New(filterSize, kSize)
 
 	for i := range 3000 {
 		if bf.Contains(fmt.Sprintf("miss-%d", i)) {
@@ -20,7 +23,7 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 	const n = 200
 	const queries = 3000
 
-	bf := New()
+	bf := New(filterSize, kSize)
 	for i := range n {
 		bf.Set(fmt.Sprintf("entry-%d", i))
 	}
@@ -44,7 +47,7 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 }
 
 func Test_SetAndContains(t *testing.T) {
-	bf := New()
+	bf := New(filterSize, kSize)
 	testData := "this is a test"
 
 	bf.Set(testData)
@@ -55,7 +58,7 @@ func Test_SetAndContains(t *testing.T) {
 }
 
 func Test_EmptySetAndDoesNotContain(t *testing.T) {
-	bf := New()
+	bf := New(filterSize, kSize)
 	testData := "I am not set in the Bloom filter"
 
 	if bf.Contains(testData) {
@@ -64,7 +67,7 @@ func Test_EmptySetAndDoesNotContain(t *testing.T) {
 }
 
 func Test_Inclusion(t *testing.T) {
-	bf := New()
+	bf := New(filterSize, kSize)
 
 	// inserting 200 items in the Bloomfilter
 	for i := range 200 {
@@ -78,23 +81,45 @@ func Test_Inclusion(t *testing.T) {
 	}
 }
 
-func TestBloomFilter_Contains(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for target function.
-		value string
-		want  bool
-	}{
-		// TODO: Add test cases.
+func Test_NewWithEstimates(t *testing.T) {
+	bf := NewFromEstimate(1000, 0.01)
+	if bf.filterSize != 9585 {
+		t.Fatal("wrong filtersize for estimate")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			bf := New()
-			got := bf.Contains(tt.value)
-			// TODO: update the condition below to compare got with tt.want.
-			if true {
-				t.Errorf("Contains() = %v, want %v", got, tt.want)
-			}
-		})
+
+	if bf.kSize != 7 {
+		t.Fatal("wrong kSize for estimate")
+	}
+}
+
+func Test_FalsePositiveRate(t *testing.T) {
+	const n = 1000
+	const p = 0.01
+	const queries = 10000
+
+	bf := NewFromEstimate(n, p)
+
+	for i := range n {
+		bf.Set(fmt.Sprintf("entry-%d", i))
+	}
+
+	fpCount := 0
+	for i := range queries {
+		if bf.Contains(fmt.Sprintf("miss-%d", i)) {
+			fpCount++
+		}
+	}
+
+	// Theoretical false positive rate: (1 - e^(-kn/m))^k
+	// Uses the filter's actual m and k, which differ from p due to rounding.
+	expected := math.Pow(1-math.Exp(-float64(bf.kSize*n)/float64(bf.filterSize)), float64(bf.kSize))
+	measured := float64(fpCount) / float64(queries)
+
+	sigma := math.Sqrt(expected * (1 - expected) / float64(queries))
+	tolerance := 5 * sigma
+
+	if math.Abs(measured-expected) > tolerance {
+		t.Fatalf("false positive rate %.3f%% (%d/%d), expected %.3f%% ± %.3f%% (m=%d, k=%d)",
+			measured*100, fpCount, queries, expected*100, tolerance*100, bf.filterSize, bf.kSize)
 	}
 }

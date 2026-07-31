@@ -1,20 +1,31 @@
+// package bloomfilter is a library implementing a bloom filter https://en.wikipedia.org/wiki/Bloom_filter
 package bloomfilter
 
 import (
 	"fmt"
 	"hash/maphash"
+	"math"
 )
 
-const filterSize = 1024 / 8 // temp divide by 8 to have consistent test results when implementing bit packing
-const kSize = 7
-
+// BloomFilter is the data structure holding the storage of the bloomfilter
+// it contains parameters used for boundaries of the bloomfilter and a slice of seeds used for hashing
+// An empty Bloom filter is a bit array of m bits, all set to 0.
+// It is equipped with k different hash functions, which map set elements to one of the m possible array positions.
 type BloomFilter struct {
-	filter [filterSize]byte
-	seeds  [kSize]maphash.Seed
+	filterSize uint64
+	kSize      uint64
+	filter     []byte
+	seeds      []maphash.Seed
 }
 
-func New() *BloomFilter {
-	bf := &BloomFilter{}
+// New creates a bloomfilter with the filterSize (m) and kSize (k)
+func New(filterSize, kSize uint64) *BloomFilter {
+	bf := &BloomFilter{
+		filterSize: filterSize,
+		kSize:      kSize,
+		filter:     make([]byte, filterSize),
+		seeds:      make([]maphash.Seed, kSize),
+	}
 	for i := range bf.seeds {
 		bf.seeds[i] = maphash.MakeSeed()
 	}
@@ -22,6 +33,22 @@ func New() *BloomFilter {
 	return bf
 }
 
+// NewFromEstimate creates a new BloomFilter but calculates the filterSize (m) and kSize (k)
+// from the expectedItems stored in the bloomfilter as well as the false positive rate as float (0.03) is 3% false positive rate
+func NewFromEstimate(expectedItems int, falsePositiveRate float64) *BloomFilter {
+	m := -float64(expectedItems) * math.Log(falsePositiveRate) / (math.Ln2 * math.Ln2)
+	k := (m / float64(expectedItems)) * math.Ln2
+	if k < 1 {
+		k = 1
+	}
+
+	filterSize := uint64(math.Round(m))
+	kSize := uint64(math.Round(k))
+
+	return New(filterSize, kSize)
+}
+
+// Set inserts a string value in the bloomfilter
 func (bf *BloomFilter) Set(value string) {
 	for _, s := range bf.seeds {
 		i := bf.index(s, value)
@@ -33,6 +60,9 @@ func (bf *BloomFilter) Set(value string) {
 	}
 }
 
+// Contains checks if a string is stored in the bloomfilter
+// It returns true if the item is probably in the bloomfilter.
+// It returns false if the string is definitely not stored in the bloomfilter
 func (bf *BloomFilter) Contains(value string) bool {
 	for _, s := range bf.seeds {
 		i := bf.index(s, value)
@@ -48,9 +78,18 @@ func (bf *BloomFilter) Contains(value string) bool {
 }
 
 func (bf *BloomFilter) index(s maphash.Seed, value string) uint64 {
-	return maphash.String(s, value) % filterSize
+	return maphash.String(s, value) % bf.filterSize
 }
 
+// Print prints the entire content of the bloomfilter to stdout
+// it can be used for manual verification and debugging
+// the print prints the bit layout grouped by bytes with 4 bytes on a line
 func (bf *BloomFilter) Print() {
-	fmt.Printf("bloom filter content: %d\n", bf.filter)
+	fmt.Println("Bloom filter content:")
+	for i, b := range bf.filter {
+		fmt.Printf("%08b ", b)
+		if (i+1)%4 == 0 {
+			fmt.Println()
+		}
+	}
 }
