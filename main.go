@@ -9,9 +9,9 @@ import (
 func main() {
 	// bf := bloomfilter.NewFromEstimate(100, 0.01)
 	bf, _ := bloomfilter.New(bloomfilter.WithPresetSize(bloomfilter.Small()))
-	bf.Set("test")
-	bf.Set("test2")
-	bf.Set("test")
+	bf.Add("test")
+	bf.Add("test2")
+	bf.Add("test")
 
 	fmt.Printf("contains 'test': %t\n", bf.Contains("test"))
 	fmt.Printf("contains 'test2': %t\n", bf.Contains("test2"))

@@ -2,6 +2,7 @@
 package bloomfilter
 
 import (
+	"errors"
 	"fmt"
 	"hash/maphash"
 	"math"
@@ -12,45 +13,52 @@ import (
 // An empty Bloom filter is a bit array of m bits, all set to 0.
 // It is equipped with k different hash functions, which map set elements to one of the m possible array positions.
 type BloomFilter struct {
-	filterSize uint64
-	kSize      uint64
-	filter     []byte
-	seeds      [2]maphash.Seed
+	mSize  uint64
+	kSize  uint64
+	filter []byte
+	seeds  [2]maphash.Seed
 }
 
-type parameters struct {
-	k uint64
-	m uint64
+type Parameters struct {
+	K uint64
+	M uint64
 }
 
 // Small sets m and k parameters for a small Bloomfilter that are alighed for optimal distribution
-func Small() parameters {
-	return parameters{
+func Small() Parameters {
+	return Parameters{
 		7,
 		9586,
 	}
 }
 
 // Medium sets m and k parameters for a medium sized Bloomfilter that are alighed for optimal distribution
-func Medium() parameters {
-	return parameters{
+func Medium() Parameters {
+	return Parameters{
 		7,
 		958506,
 	}
 }
 
 // Large sets m and k parameters for a large sized Bloomfilter that are alighed for optimal distribution
-func Large() parameters {
-	return parameters{
+func Large() Parameters {
+	return Parameters{
 		10,
 		14377588,
 	}
 }
 
-func WithPresetSize(p parameters) func(*BloomFilter) {
+func WithPresetSize(p Parameters) func(*BloomFilter) {
 	return func(bf *BloomFilter) {
-		bf.filterSize = p.m
-		bf.kSize = p.k
+		bf.mSize = p.M
+		bf.kSize = p.K
+	}
+}
+
+func WithSize(m, k uint64) func(*BloomFilter) {
+	return func(bf *BloomFilter) {
+		bf.mSize = m
+		bf.kSize = k
 	}
 }
 
@@ -61,7 +69,7 @@ func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
 		option(bf)
 	}
 
-	if bf.filterSize == 0 {
+	if bf.mSize == 0 {
 		return nil, fmt.Errorf("bloomfilter initialized without filtersize (m)")
 	}
 
@@ -69,7 +77,7 @@ func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
 		return nil, fmt.Errorf("bloomfilter initialized without kSize (k)")
 	}
 
-	bf.filter = make([]byte, bf.filterSize)
+	bf.filter = make([]byte, (bf.mSize+7)/8)
 	bf.seeds = [2]maphash.Seed{
 		maphash.MakeSeed(),
 		maphash.MakeSeed(),
@@ -81,20 +89,28 @@ func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
 // NewFromEstimate creates a new BloomFilter but calculates the filterSize (m) and kSize (k)
 // from the expectedItems stored in the bloomfilter as well as the false positive rate as float (0.03) is 3% false positive rate
 func NewFromEstimate(expectedItems int, falsePositiveRate float64) (*BloomFilter, error) {
+	if expectedItems <= 0 {
+		return nil, errors.New("expected items must be > 0")
+	}
+
+	if falsePositiveRate <= 0 || falsePositiveRate >= 1 {
+		return nil, errors.New("falsePositiveRate must be > 0 and < 1")
+	}
+
 	m := -float64(expectedItems) * math.Log(falsePositiveRate) / (math.Ln2 * math.Ln2)
 	k := (m / float64(expectedItems)) * math.Ln2
 	if k < 1 {
 		k = 1
 	}
 
-	filterSize := uint64(math.Round(m))
+	filterSize := uint64(math.Ceil(m))
 	kSize := uint64(math.Round(k))
 
-	return New(WithPresetSize(parameters{m: filterSize, k: kSize}))
+	return New(WithPresetSize(Parameters{M: filterSize, K: kSize}))
 }
 
 // Set inserts a string value in the bloomfilter
-func (bf *BloomFilter) Set(value string) {
+func (bf *BloomFilter) Add(value string) {
 	setOp := func(index uint64) bool {
 		// i >> 3 (i / 8) get the actual byte that is holding the index
 		// i & 7 determines which bit in the byte (a byte stores 0-7 bits) the result is the position in the byte between 0 and 7
@@ -128,18 +144,13 @@ func (bf *BloomFilter) index(value string, op func(index uint64) bool) bool {
 	h2 := maphash.String(bf.seeds[1], value)
 
 	// guard against multiplying by zero
-	// and make sure h2 is negative number to increase likelyhood h2 is coprime with m
+	// and make sure h2 is odd number to increase likelyhood h2 is coprime with m
 	if (h2 == 0) || (h2%2 == 0) {
 		h2 += 1
 	}
 
-	// guard against multiplying by zero
-	if h1 == 0 {
-		h1 = 1
-	}
-
 	for i := range bf.kSize {
-		index := (h1 + i*h2) % bf.filterSize
+		index := (h1 + i*h2) % bf.mSize
 		if !op(index) {
 			return false
 		}
