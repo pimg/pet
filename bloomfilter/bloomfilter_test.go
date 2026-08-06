@@ -12,7 +12,7 @@ const filterSize = 128
 const kSize = 7
 
 func Test_EmptyFalsePositive(t *testing.T) {
-	bf, err := New(WithSize(filterSize, kSize))
+	bf, err := New(WithSize(Parameters{filterSize, kSize}))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfitler")
 	}
@@ -28,7 +28,7 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 	const n = 200
 	const queries = 3000
 
-	bf, err := New(WithSize(filterSize, kSize))
+	bf, err := New(WithSize(Parameters{filterSize, kSize}))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfitler")
 	}
@@ -46,7 +46,7 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 
 	// Theoretical false positive rate: (1 - e^(-kn/m))^k
 	expected := math.Pow(1-math.Exp(-float64(kSize*n)/float64(filterSize)), float64(kSize))
-	measured := float64(fpCount) / float64(queries)
+	measured := bf.CurrentFalsePositiveRate()
 
 	const tolerance = 0.04
 	if math.Abs(measured-expected) > tolerance {
@@ -56,7 +56,7 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 }
 
 func Test_SetAndContains(t *testing.T) {
-	bf, err := New(WithSize(filterSize, kSize))
+	bf, err := New(WithSize(Parameters{filterSize, kSize}))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfitler")
 	}
@@ -71,7 +71,7 @@ func Test_SetAndContains(t *testing.T) {
 }
 
 func Test_EmptySetAndDoesNotContain(t *testing.T) {
-	bf, err := New(WithSize(filterSize, kSize))
+	bf, err := New(WithSize(Parameters{filterSize, kSize}))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfitler")
 	}
@@ -84,7 +84,7 @@ func Test_EmptySetAndDoesNotContain(t *testing.T) {
 }
 
 func Test_Inclusion(t *testing.T) {
-	bf, err := New(WithPresetSize(Parameters{filterSize, kSize}))
+	bf, err := New(WithSize(Parameters{filterSize, kSize}))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfilter")
 	}
@@ -117,7 +117,7 @@ func Test_NewWithEstimates(t *testing.T) {
 }
 
 func Test_WithSmall(t *testing.T) {
-	bf, err := New(WithPresetSize(Small()))
+	bf, err := New(WithSize(Small()))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfilter")
 	}
@@ -141,7 +141,7 @@ func Test_WithSmall(t *testing.T) {
 }
 
 func Test_WithMedium(t *testing.T) {
-	bf, err := New(WithPresetSize(Medium()))
+	bf, err := New(WithSize(Medium()))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfilter")
 	}
@@ -165,7 +165,7 @@ func Test_WithMedium(t *testing.T) {
 }
 
 func Test_WithLarge(t *testing.T) {
-	bf, err := New(WithPresetSize(Large()))
+	bf, err := New(WithSize(Large()))
 	if err != nil {
 		t.Fatal("failed to initialize bloomfilter")
 	}
@@ -231,7 +231,7 @@ func Test_invalidBloomfilter(t *testing.T) {
 }
 
 func Test_missingKsize(t *testing.T) {
-	_, err := New(WithPresetSize(Parameters{M: 10}))
+	_, err := New(WithSize(Parameters{M: 10}))
 	if err == nil {
 		t.Fatal("a bloomfilter without kSize should not be initialized")
 	}
@@ -242,7 +242,7 @@ func Test_missingKsize(t *testing.T) {
 }
 
 func Test_missingM(t *testing.T) {
-	_, err := New(WithPresetSize(Parameters{K: 10}))
+	_, err := New(WithSize(Parameters{K: 10}))
 	if err == nil {
 		t.Fatal("a bloomfilter without filterSize (m) should not be initialized")
 	}
@@ -253,7 +253,7 @@ func Test_missingM(t *testing.T) {
 }
 
 func Test_encodeDecode(t *testing.T) {
-	bf, _ := New(WithPresetSize(Small()))
+	bf, _ := New(WithSize(Small()))
 	bf.Add("test1")
 	bf.Add("test2")
 	bf.Add("test3")
@@ -282,7 +282,7 @@ func Test_encodeDecode(t *testing.T) {
 }
 
 func Test_persistenceWithFile(t *testing.T) {
-	bf, _ := New(WithPresetSize(Small()))
+	bf, _ := New(WithSize(Small()))
 	bf.Add("test1")
 	bf.Add("test2")
 	bf.Add("test3")

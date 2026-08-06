@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/maphash"
 	"math"
+	"math/bits"
 )
 
 // BloomFilter is the data structure holding the storage of the bloomfilter
@@ -48,20 +49,15 @@ func Large() Parameters {
 	}
 }
 
-func WithPresetSize(p Parameters) func(*BloomFilter) {
+// WithSize option for setting custom m and k values
+func WithSize(p Parameters) func(*BloomFilter) {
 	return func(bf *BloomFilter) {
 		bf.mSize = p.M
 		bf.kSize = p.K
 	}
 }
 
-func WithSize(m, k uint64) func(*BloomFilter) {
-	return func(bf *BloomFilter) {
-		bf.mSize = m
-		bf.kSize = k
-	}
-}
-
+// New initializes the bloomfilter with options for configuring the bloomfilter
 func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
 	bf := &BloomFilter{}
 
@@ -106,7 +102,7 @@ func NewFromEstimate(expectedItems int, falsePositiveRate float64) (*BloomFilter
 	filterSize := uint64(math.Ceil(m))
 	kSize := uint64(math.Round(k))
 
-	return New(WithPresetSize(Parameters{M: filterSize, K: kSize}))
+	return New(WithSize(Parameters{M: filterSize, K: kSize}))
 }
 
 // Set inserts a string value in the bloomfilter
@@ -159,15 +155,17 @@ func (bf *BloomFilter) index(value string, op func(index uint64) bool) bool {
 	return true
 }
 
-// Print prints the entire content of the bloomfilter to stdout
-// it can be used for manual verification and debugging
-// the print prints the bit layout grouped by bytes with 4 bytes on a line
-func (bf *BloomFilter) Print() {
-	fmt.Println("Bloom filter content:")
-	for i, b := range bf.filter {
-		fmt.Printf("%08b ", b)
-		if (i+1)%4 == 0 {
-			fmt.Println()
-		}
+// FillRatio returns the percentage of bits set in the bloomfilter
+func (bf *BloomFilter) FillRatio() float64 {
+	total := 0
+	for _, b := range bf.filter {
+		total += bits.OnesCount8(b)
 	}
+
+	return float64(total) / float64(bf.mSize)
+}
+
+// CurrentFalsePositiveRate calculates the curent false positive rate based on the current Fill Ratio
+func (bf *BloomFilter) CurrentFalsePositiveRate() float64 {
+	return math.Pow(bf.FillRatio(), float64(bf.kSize))
 }

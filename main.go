@@ -8,7 +8,7 @@ import (
 
 func main() {
 	// bf := bloomfilter.NewFromEstimate(100, 0.01)
-	bf, _ := bloomfilter.New(bloomfilter.WithPresetSize(bloomfilter.Small()))
+	bf, _ := bloomfilter.New(bloomfilter.WithSize(bloomfilter.Small()))
 	bf.Add("test")
 	bf.Add("test2")
 	bf.Add("test")
