@@ -6,11 +6,11 @@ import (
 	"testing"
 )
 
-const filterSize = 1024 / 8 // temp divide by 8 to have consistent test results when implementing bit packing
+const filterSize = 128
 const kSize = 7
 
 func Test_EmptyFalsePositive(t *testing.T) {
-	bf := New(filterSize, kSize)
+	bf := new(filterSize, kSize)
 
 	for i := range 3000 {
 		if bf.Contains(fmt.Sprintf("miss-%d", i)) {
@@ -23,7 +23,7 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 	const n = 200
 	const queries = 3000
 
-	bf := New(filterSize, kSize)
+	bf := new(filterSize, kSize)
 	for i := range n {
 		bf.Set(fmt.Sprintf("entry-%d", i))
 	}
@@ -47,7 +47,7 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 }
 
 func Test_SetAndContains(t *testing.T) {
-	bf := New(filterSize, kSize)
+	bf := new(filterSize, kSize)
 	testData := "this is a test"
 
 	bf.Set(testData)
@@ -58,7 +58,7 @@ func Test_SetAndContains(t *testing.T) {
 }
 
 func Test_EmptySetAndDoesNotContain(t *testing.T) {
-	bf := New(filterSize, kSize)
+	bf := new(filterSize, kSize)
 	testData := "I am not set in the Bloom filter"
 
 	if bf.Contains(testData) {
@@ -67,7 +67,7 @@ func Test_EmptySetAndDoesNotContain(t *testing.T) {
 }
 
 func Test_Inclusion(t *testing.T) {
-	bf := New(filterSize, kSize)
+	bf := new(filterSize, kSize)
 
 	// inserting 200 items in the Bloomfilter
 	for i := range 200 {
@@ -89,6 +89,66 @@ func Test_NewWithEstimates(t *testing.T) {
 
 	if bf.kSize != 7 {
 		t.Fatal("wrong kSize for estimate")
+	}
+}
+
+func Test_WithSmall(t *testing.T) {
+	bf := New(Small())
+	if bf.filterSize != 9586 {
+		t.Fatalf("filter size for small should be 9686, got: %d", bf.filterSize)
+	}
+
+	if bf.kSize != 7 {
+		t.Fatalf("kSize for small should be 7, got: %d", bf.kSize)
+	}
+
+	bf.Set("test")
+	if !bf.Contains("test") {
+		t.Fatal("bloomfilter should contain 'test'")
+	}
+
+	if bf.Contains("unknown") {
+		t.Fatal("bloomfilter should not contain 'unknown'")
+	}
+}
+
+func Test_WithMedium(t *testing.T) {
+	bf := New(Medium())
+	if bf.filterSize != 958506 {
+		t.Fatalf("filter size for small should be 958506, got: %d", bf.filterSize)
+	}
+
+	if bf.kSize != 7 {
+		t.Fatalf("kSize for small should be 7, got: %d", bf.kSize)
+	}
+
+	bf.Set("test")
+	if !bf.Contains("test") {
+		t.Fatal("bloomfilter should contain 'test'")
+	}
+
+	if bf.Contains("unknown") {
+		t.Fatal("bloomfilter should not contain 'unknown'")
+	}
+}
+
+func Test_WithLarge(t *testing.T) {
+	bf := New(Large())
+	if bf.filterSize != 14377588 {
+		t.Fatalf("filter size for small should be 14377588, got: %d", bf.filterSize)
+	}
+
+	if bf.kSize != 10 {
+		t.Fatalf("kSize for small should be 10, got: %d", bf.kSize)
+	}
+
+	bf.Set("test")
+	if !bf.Contains("test") {
+		t.Fatal("bloomfilter should contain 'test'")
+	}
+
+	if bf.Contains("unknown") {
+		t.Fatal("bloomfilter should not contain 'unknown'")
 	}
 }
 
