@@ -15,17 +15,12 @@ type BloomFilter struct {
 	filterSize uint64
 	kSize      uint64
 	filter     []byte
-	seeds      []maphash.Seed
+	seeds      [2]maphash.Seed
 }
 
 type parameters struct {
 	k uint64
 	m uint64
-}
-
-// New creates a bloomfilter with one of the default parameter groups
-func New(conf parameters) *BloomFilter {
-	return new(conf.m, conf.k)
 }
 
 // Small sets m and k parameters for a small Bloomfilter that are alighed for optimal distribution
@@ -52,24 +47,40 @@ func Large() parameters {
 	}
 }
 
-// new creates a bloomfilter with the filterSize (m) and kSize (k)
-func new(filterSize, kSize uint64) *BloomFilter {
-	bf := &BloomFilter{
-		filterSize: filterSize,
-		kSize:      kSize,
-		filter:     make([]byte, filterSize),
-		seeds:      make([]maphash.Seed, 2),
+func WithPresetSize(p parameters) func(*BloomFilter) {
+	return func(bf *BloomFilter) {
+		bf.filterSize = p.m
+		bf.kSize = p.k
 	}
-	for i := range bf.seeds {
-		bf.seeds[i] = maphash.MakeSeed()
+}
+
+func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
+	bf := &BloomFilter{}
+
+	for _, option := range options {
+		option(bf)
 	}
 
-	return bf
+	if bf.filterSize == 0 {
+		return nil, fmt.Errorf("bloomfilter initialized without filtersize (m)")
+	}
+
+	if bf.kSize == 0 {
+		return nil, fmt.Errorf("bloomfilter initialized without kSize (k)")
+	}
+
+	bf.filter = make([]byte, bf.filterSize)
+	bf.seeds = [2]maphash.Seed{
+		maphash.MakeSeed(),
+		maphash.MakeSeed(),
+	}
+
+	return bf, nil
 }
 
 // NewFromEstimate creates a new BloomFilter but calculates the filterSize (m) and kSize (k)
 // from the expectedItems stored in the bloomfilter as well as the false positive rate as float (0.03) is 3% false positive rate
-func NewFromEstimate(expectedItems int, falsePositiveRate float64) *BloomFilter {
+func NewFromEstimate(expectedItems int, falsePositiveRate float64) (*BloomFilter, error) {
 	m := -float64(expectedItems) * math.Log(falsePositiveRate) / (math.Ln2 * math.Ln2)
 	k := (m / float64(expectedItems)) * math.Ln2
 	if k < 1 {
@@ -79,7 +90,7 @@ func NewFromEstimate(expectedItems int, falsePositiveRate float64) *BloomFilter 
 	filterSize := uint64(math.Round(m))
 	kSize := uint64(math.Round(k))
 
-	return new(filterSize, kSize)
+	return New(WithPresetSize(parameters{m: filterSize, k: kSize}))
 }
 
 // Set inserts a string value in the bloomfilter

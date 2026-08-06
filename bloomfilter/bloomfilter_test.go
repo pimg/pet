@@ -10,7 +10,10 @@ const filterSize = 128
 const kSize = 7
 
 func Test_EmptyFalsePositive(t *testing.T) {
-	bf := new(filterSize, kSize)
+	bf, err := New(WithPresetSize(parameters{filterSize, kSize}))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfitler")
+	}
 
 	for i := range 3000 {
 		if bf.Contains(fmt.Sprintf("miss-%d", i)) {
@@ -23,7 +26,11 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 	const n = 200
 	const queries = 3000
 
-	bf := new(filterSize, kSize)
+	bf, err := New(WithPresetSize(parameters{filterSize, kSize}))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfitler")
+	}
+
 	for i := range n {
 		bf.Set(fmt.Sprintf("entry-%d", i))
 	}
@@ -47,7 +54,11 @@ func Test_200ItemsFalsePositive(t *testing.T) {
 }
 
 func Test_SetAndContains(t *testing.T) {
-	bf := new(filterSize, kSize)
+	bf, err := New(WithPresetSize(parameters{filterSize, kSize}))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfitler")
+	}
+
 	testData := "this is a test"
 
 	bf.Set(testData)
@@ -58,7 +69,11 @@ func Test_SetAndContains(t *testing.T) {
 }
 
 func Test_EmptySetAndDoesNotContain(t *testing.T) {
-	bf := new(filterSize, kSize)
+	bf, err := New(WithPresetSize(parameters{filterSize, kSize}))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfitler")
+	}
+
 	testData := "I am not set in the Bloom filter"
 
 	if bf.Contains(testData) {
@@ -67,7 +82,10 @@ func Test_EmptySetAndDoesNotContain(t *testing.T) {
 }
 
 func Test_Inclusion(t *testing.T) {
-	bf := new(filterSize, kSize)
+	bf, err := New(WithPresetSize(parameters{filterSize, kSize}))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfilter")
+	}
 
 	// inserting 200 items in the Bloomfilter
 	for i := range 200 {
@@ -82,7 +100,11 @@ func Test_Inclusion(t *testing.T) {
 }
 
 func Test_NewWithEstimates(t *testing.T) {
-	bf := NewFromEstimate(1000, 0.01)
+	bf, err := NewFromEstimate(1000, 0.01)
+	if err != nil {
+		t.Fatal("failed to initialize bloomfilter")
+	}
+
 	if bf.filterSize != 9585 {
 		t.Fatal("wrong filtersize for estimate")
 	}
@@ -93,7 +115,11 @@ func Test_NewWithEstimates(t *testing.T) {
 }
 
 func Test_WithSmall(t *testing.T) {
-	bf := New(Small())
+	bf, err := New(WithPresetSize(Small()))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfilter")
+	}
+
 	if bf.filterSize != 9586 {
 		t.Fatalf("filter size for small should be 9686, got: %d", bf.filterSize)
 	}
@@ -113,7 +139,11 @@ func Test_WithSmall(t *testing.T) {
 }
 
 func Test_WithMedium(t *testing.T) {
-	bf := New(Medium())
+	bf, err := New(WithPresetSize(Medium()))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfilter")
+	}
+
 	if bf.filterSize != 958506 {
 		t.Fatalf("filter size for small should be 958506, got: %d", bf.filterSize)
 	}
@@ -133,7 +163,11 @@ func Test_WithMedium(t *testing.T) {
 }
 
 func Test_WithLarge(t *testing.T) {
-	bf := New(Large())
+	bf, err := New(WithPresetSize(Large()))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfilter")
+	}
+
 	if bf.filterSize != 14377588 {
 		t.Fatalf("filter size for small should be 14377588, got: %d", bf.filterSize)
 	}
@@ -157,7 +191,10 @@ func Test_FalsePositiveRate(t *testing.T) {
 	const p = 0.01
 	const queries = 10000
 
-	bf := NewFromEstimate(n, p)
+	bf, err := NewFromEstimate(n, p)
+	if err != nil {
+		t.Fatal("failed to initialize bloomfilter")
+	}
 
 	for i := range n {
 		bf.Set(fmt.Sprintf("entry-%d", i))
@@ -181,5 +218,34 @@ func Test_FalsePositiveRate(t *testing.T) {
 	if math.Abs(measured-expected) > tolerance {
 		t.Fatalf("false positive rate %.3f%% (%d/%d), expected %.3f%% ± %.3f%% (m=%d, k=%d)",
 			measured*100, fpCount, queries, expected*100, tolerance*100, bf.filterSize, bf.kSize)
+	}
+}
+
+func Test_invalidBloomfilter(t *testing.T) {
+	_, err := New()
+	if err == nil {
+		t.Fatal("a bloomfilter without parameters should not be initialized")
+	}
+}
+
+func Test_missingKsize(t *testing.T) {
+	_, err := New(WithPresetSize(parameters{m: 10}))
+	if err == nil {
+		t.Fatal("a bloomfilter without kSize should not be initialized")
+	}
+
+	if err.Error() != "bloomfilter initialized without kSize (k)" {
+		t.Fatalf("New returned an invalid error: %v", err)
+	}
+}
+
+func Test_missingM(t *testing.T) {
+	_, err := New(WithPresetSize(parameters{k: 10}))
+	if err == nil {
+		t.Fatal("a bloomfilter without filterSize (m) should not be initialized")
+	}
+
+	if err.Error() != "bloomfilter initialized without filtersize (m)" {
+		t.Fatalf("New returned an invalid error: %v", err)
 	}
 }

@@ -8,7 +8,7 @@ import (
 
 func main() {
 	// bf := bloomfilter.NewFromEstimate(100, 0.01)
-	bf := bloomfilter.New(bloomfilter.Small())
+	bf, _ := bloomfilter.New(bloomfilter.WithPresetSize(bloomfilter.Small()))
 	bf.Set("test")
 	bf.Set("test2")
 	bf.Set("test")
@@ -17,5 +17,5 @@ func main() {
 	fmt.Printf("contains 'test2': %t\n", bf.Contains("test2"))
 	fmt.Printf("contains 'foo': %t\n", bf.Contains("foo"))
 
-	bf.Print()
+	// bf.Print()
 }
