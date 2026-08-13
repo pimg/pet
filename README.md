@@ -5,9 +5,7 @@ https://maltsev.space/blog/008-bloom-filters-pt1
 - [v] implement Kirsch–Mitzenmacher optimization
 - [v] implement persist and load from persist (serialize / deserialize)
 - [v] implement compression in the persistence
-- [ ] implement thread safety
-
-Thread safety isn't documented. Concurrent Add calls race on the same byte — read-modify-write on |= is not atomic, so a concurrent set can be lost, producing a false negative, which breaks the filter's one hard guarantee. Either document "not safe for concurrent use" or add an RWMutex.
+- [v] implement thread safety
 
 # Possible next steps
 1. Private Set Intersection (PSI) Service

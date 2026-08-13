@@ -7,6 +7,7 @@ import (
 	"hash/maphash"
 	"math"
 	"math/bits"
+	"sync"
 )
 
 // BloomFilter is the data structure holding the storage of the bloomfilter
@@ -19,6 +20,7 @@ type BloomFilter struct {
 	filter          []byte
 	seeds           [2]maphash.Seed
 	withCompression bool
+	rwMu            *sync.RWMutex
 }
 
 type Parameters struct {
@@ -80,6 +82,8 @@ func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
 		maphash.MakeSeed(),
 	}
 
+	bf.rwMu = new(sync.RWMutex)
+
 	return bf, nil
 }
 
@@ -108,6 +112,9 @@ func NewFromEstimate(expectedItems int, falsePositiveRate float64) (*BloomFilter
 
 // Set inserts a string value in the bloomfilter
 func (bf *BloomFilter) Add(value string) {
+	bf.rwMu.Lock()
+	defer bf.rwMu.Unlock()
+
 	setOp := func(index uint64) bool {
 		// i >> 3 (i / 8) get the actual byte that is holding the index
 		// i & 7 determines which bit in the byte (a byte stores 0-7 bits) the result is the position in the byte between 0 and 7
@@ -123,6 +130,9 @@ func (bf *BloomFilter) Add(value string) {
 // It returns true if the item is probably in the bloomfilter.
 // It returns false if the string is definitely not stored in the bloomfilter
 func (bf *BloomFilter) Contains(value string) bool {
+	bf.rwMu.RLock()
+	defer bf.rwMu.RUnlock()
+
 	containsOp := func(index uint64) bool {
 		// i >> 3 (i / 8) get the actual byte that is holding the index
 		// i & 7 determines which bit in the byte (a byte stores 0-7 bits) the result is the position in the byte between 0 and 7

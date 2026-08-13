@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -384,4 +385,24 @@ func Test_persistenceWithFileCompression(t *testing.T) {
 	}
 
 	os.Remove(testFile)
+}
+
+func Test_concurrentWrites(t *testing.T) {
+	bf, _ := New(WithSize(Small()))
+
+	rounds := 5000
+	wg := sync.WaitGroup{}
+	for i := range rounds {
+		wg.Go(func() {
+			bf.Add(fmt.Sprintf("test_%d", i))
+		})
+	}
+
+	wg.Wait()
+
+	for i := range rounds {
+		if !bf.Contains(fmt.Sprintf("test_%d", i)) {
+			t.Errorf("bloomfilter did not contain: test_%d", i)
+		}
+	}
 }
