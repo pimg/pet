@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
+	"log/slog"
 )
 
 func (bf *BloomFilter) Encode(rw io.ReadWriter) error {
@@ -12,7 +13,12 @@ func (bf *BloomFilter) Encode(rw io.ReadWriter) error {
 
 	if bf.withCompression {
 		gzipW := gzip.NewWriter(rw)
-		defer gzipW.Close()
+		defer func() {
+			err := gzipW.Close()
+			if err != nil {
+				slog.Error("failed to close gzip writer", slog.Any("error", err))
+			}
+		}()
 		encoder = gob.NewEncoder(gzipW)
 	} else {
 		encoder = gob.NewEncoder(rw)
@@ -34,7 +40,12 @@ func (bf *BloomFilter) Decode(rw io.ReadWriter) error {
 		if err != nil {
 			return fmt.Errorf("failed to create the gzip Reader: %v", err)
 		}
-		defer gzipR.Close()
+		defer func() {
+			err := gzipR.Close()
+			if err != nil {
+				slog.Error("failed to close gzip reader", slog.Any("error", err))
+			}
+		}()
 		decoder = gob.NewDecoder(gzipR)
 	} else {
 		decoder = gob.NewDecoder(rw)

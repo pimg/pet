@@ -7,7 +7,17 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
