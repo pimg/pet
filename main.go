@@ -16,6 +16,4 @@ func main() {
 	fmt.Printf("contains 'test': %t\n", bf.Contains("test"))
 	fmt.Printf("contains 'test2': %t\n", bf.Contains("test2"))
 	fmt.Printf("contains 'foo': %t\n", bf.Contains("foo"))
-
-	// bf.Print()
 }

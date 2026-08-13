@@ -281,8 +281,75 @@ func Test_encodeDecode(t *testing.T) {
 	}
 }
 
+func Test_encodeDecodeCompression(t *testing.T) {
+	bf, _ := New(WithSize(Small()), WithCompression())
+	bf.Add("test1")
+	bf.Add("test2")
+	bf.Add("test3")
+
+	var rw bytes.Buffer
+
+	err := bf.Encode(&rw)
+	if err != nil {
+		t.Fatalf("encode returned error: %v", err)
+	}
+
+	bf.filter = nil // hard reset the filter to ensure bf.filter is set in Decode
+
+	err = bf.Decode(&rw)
+	if err != nil {
+		t.Fatalf("decode returned error: %v", err)
+	}
+
+	if !bf.Contains("test1") {
+		t.Fatal("decoding failed bloomfilter should contain 'test1'")
+	}
+
+	if bf.Contains("foo") {
+		t.Fatal("decoding failed bloomfilter should not contain 'foo'")
+	}
+}
+
 func Test_persistenceWithFile(t *testing.T) {
 	bf, _ := New(WithSize(Small()))
+	bf.Add("test1")
+	bf.Add("test2")
+	bf.Add("test3")
+
+	testFile := os.TempDir() + "/test.bin"
+	file, err := os.Create(testFile)
+	if err != nil {
+		t.Fatalf("failed to create file test.bin: %v", err)
+	}
+	bf.Encode(file)
+	file.Close()
+
+	bf.filter = nil // hard reset the filter to ensure bf.filter is set in Decode
+
+	readFile, err := os.Open(testFile)
+	if err != nil {
+		t.Fatalf("failed to read test.bin: %v", err)
+	}
+	defer readFile.Close()
+
+	err = bf.Decode(readFile)
+	if err != nil {
+		t.Fatalf("decode returned error: %v", err)
+	}
+
+	if !bf.Contains("test1") {
+		t.Fatal("decoding failed bloomfilter should contain 'test1'")
+	}
+
+	if bf.Contains("foo") {
+		t.Fatal("decoding failed bloomfilter should not contain 'foo'")
+	}
+
+	os.Remove(testFile)
+}
+
+func Test_persistenceWithFileCompression(t *testing.T) {
+	bf, _ := New(WithSize(Small()), WithCompression())
 	bf.Add("test1")
 	bf.Add("test2")
 	bf.Add("test3")

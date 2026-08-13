@@ -14,10 +14,11 @@ import (
 // An empty Bloom filter is a bit array of m bits, all set to 0.
 // It is equipped with k different hash functions, which map set elements to one of the m possible array positions.
 type BloomFilter struct {
-	mSize  uint64
-	kSize  uint64
-	filter []byte
-	seeds  [2]maphash.Seed
+	mSize           uint64
+	kSize           uint64
+	filter          []byte
+	seeds           [2]maphash.Seed
+	withCompression bool
 }
 
 type Parameters struct {
