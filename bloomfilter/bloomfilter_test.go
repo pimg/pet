@@ -322,8 +322,15 @@ func Test_persistenceWithFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create file test.bin: %v", err)
 	}
-	bf.Encode(file)
-	file.Close()
+	err = bf.Encode(file)
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
+
+	err = file.Close()
+	if err != nil {
+		t.Fatalf("failed to close file: %v", err)
+	}
 
 	bf.filter = nil // hard reset the filter to ensure bf.filter is set in Decode
 
@@ -331,7 +338,12 @@ func Test_persistenceWithFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read test.bin: %v", err)
 	}
-	defer readFile.Close()
+	defer func() {
+		err = readFile.Close()
+		if err != nil {
+			t.Fatalf("failed to close file reader: %v", err)
+		}
+	}()
 
 	err = bf.Decode(readFile)
 	if err != nil {
@@ -346,7 +358,10 @@ func Test_persistenceWithFile(t *testing.T) {
 		t.Fatal("decoding failed bloomfilter should not contain 'foo'")
 	}
 
-	os.Remove(testFile)
+	err = os.Remove(testFile)
+	if err != nil {
+		t.Fatalf("failed to remove file: %v", err)
+	}
 }
 
 func Test_persistenceWithFileCompression(t *testing.T) {
@@ -360,8 +375,15 @@ func Test_persistenceWithFileCompression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create file test.bin: %v", err)
 	}
-	bf.Encode(file)
-	file.Close()
+	err = bf.Encode(file)
+	if err != nil {
+		t.Fatalf("failed to encode: %v", err)
+	}
+
+	err = file.Close()
+	if err != nil {
+		t.Fatalf("failed to close file: %v", err)
+	}
 
 	bf.filter = nil // hard reset the filter to ensure bf.filter is set in Decode
 
@@ -369,7 +391,12 @@ func Test_persistenceWithFileCompression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read test.bin: %v", err)
 	}
-	defer readFile.Close()
+	defer func() {
+		err = readFile.Close()
+		if err != nil {
+			t.Fatalf("failed to close file: %v", err)
+		}
+	}()
 
 	err = bf.Decode(readFile)
 	if err != nil {
@@ -384,7 +411,10 @@ func Test_persistenceWithFileCompression(t *testing.T) {
 		t.Fatal("decoding failed bloomfilter should not contain 'foo'")
 	}
 
-	os.Remove(testFile)
+	err = os.Remove(testFile)
+	if err != nil {
+		t.Fatalf("failed to remove file: %v", err)
+	}
 }
 
 func Test_concurrentWrites(t *testing.T) {
