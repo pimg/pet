@@ -6,6 +6,7 @@ https://maltsev.space/blog/008-bloom-filters-pt1
 - [v] implement persist and load from persist (serialize / deserialize)
 - [v] implement compression in the persistence
 - [v] implement thread safety
+- [v] implement pluggable Hasher
 
 # Possible next steps
 1. Private Set Intersection (PSI) Service

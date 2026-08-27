@@ -3,12 +3,21 @@ package bloomfilter
 import (
 	"compress/gzip"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 )
 
+var ErrorNoPersistentHasher = errors.New("In order to use persistent the Hasher must implement PersistentHasher")
+
+// TODO add godoc
+// TODO add Seeds and ID to encoded string
 func (bf *BloomFilter) Encode(rw io.ReadWriter) error {
+	if !bf.persistentHasher() {
+		return ErrorNoPersistentHasher
+	}
+
 	encoder := new(gob.Encoder)
 
 	if bf.withCompression {
@@ -32,7 +41,14 @@ func (bf *BloomFilter) Encode(rw io.ReadWriter) error {
 	return nil
 }
 
+// TODO add godoc
+// TODO add Seeds and ID to decoded struct
+// TODO reconstruct the correct hasher with the correct seeds
 func (bf *BloomFilter) Decode(rw io.ReadWriter) error {
+	if !bf.persistentHasher() {
+		return ErrorNoPersistentHasher
+	}
+
 	decoder := new(gob.Decoder)
 
 	if bf.withCompression {
@@ -62,5 +78,14 @@ func (bf *BloomFilter) Decode(rw io.ReadWriter) error {
 func WithCompression() func(*BloomFilter) {
 	return func(bf *BloomFilter) {
 		bf.withCompression = true
+	}
+}
+
+func (bf *BloomFilter) persistentHasher() bool {
+	switch bf.hasher.(type) {
+	case PersistentHasher:
+		return true
+	default:
+		return false
 	}
 }
