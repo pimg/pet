@@ -58,6 +58,7 @@ func WithSize(p Parameters) func(*BloomFilter) {
 	}
 }
 
+// WithHasher is an option for configuring the Bloomfilter with a caller provided Hasher implementation
 func WithHasher(h Hasher) func(*BloomFilter) {
 	return func(bf *BloomFilter) {
 		bf.hasher = h
