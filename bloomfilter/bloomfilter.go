@@ -4,7 +4,6 @@ package bloomfilter
 import (
 	"errors"
 	"fmt"
-	"hash/maphash"
 	"math"
 	"math/bits"
 	"sync"
@@ -15,12 +14,11 @@ import (
 // An empty Bloom filter is a bit array of m bits, all set to 0.
 // It is equipped with k different hash functions, which map set elements to one of the m possible array positions.
 type BloomFilter struct {
-	mSize           uint64
-	kSize           uint64
-	filter          []byte
-	seeds           [2]maphash.Seed
-	withCompression bool
-	rwMu            *sync.RWMutex
+	mSize  uint64
+	kSize  uint64
+	filter []byte
+	hasher Hasher
+	rwMu   *sync.RWMutex
 }
 
 type Parameters struct {
@@ -60,6 +58,13 @@ func WithSize(p Parameters) func(*BloomFilter) {
 	}
 }
 
+// WithHasher is an option for configuring the Bloomfilter with a caller provided Hasher implementation
+func WithHasher(h Hasher) func(*BloomFilter) {
+	return func(bf *BloomFilter) {
+		bf.hasher = h
+	}
+}
+
 // New initializes the bloomfilter with options for configuring the bloomfilter
 func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
 	bf := &BloomFilter{}
@@ -77,9 +82,10 @@ func New(options ...func(*BloomFilter)) (*BloomFilter, error) {
 	}
 
 	bf.filter = make([]byte, (bf.mSize+7)/8)
-	bf.seeds = [2]maphash.Seed{
-		maphash.MakeSeed(),
-		maphash.MakeSeed(),
+
+	// MapHashHasher is the default hasher
+	if bf.hasher == nil {
+		bf.hasher = NewMapHashHasher()
 	}
 
 	bf.rwMu = new(sync.RWMutex)
@@ -147,15 +153,7 @@ func (bf *BloomFilter) Contains(value string) bool {
 }
 
 func (bf *BloomFilter) index(value string, op func(index uint64) bool) bool {
-	h1 := maphash.String(bf.seeds[0], value)
-	h2 := maphash.String(bf.seeds[1], value)
-
-	// guard against multiplying by zero
-	// and make sure h2 is odd number to increase likelyhood h2 is coprime with m
-	if (h2 == 0) || (h2%2 == 0) {
-		h2 += 1
-	}
-
+	h1, h2 := bf.hasher.Sum128([]byte(value))
 	for i := range bf.kSize {
 		index := (h1 + i*h2) % bf.mSize
 		if !op(index) {
