@@ -68,6 +68,21 @@ func Test_SetAndContains(t *testing.T) {
 	}
 }
 
+func Test_SetAndContainsBytes(t *testing.T) {
+	bf, err := New(WithSize(Parameters{filterSize, kSize}))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfitler")
+	}
+
+	testData := []byte("this is a test")
+
+	bf.AddBytes(testData)
+
+	if !bf.ContainsBytes(testData) {
+		t.Fatalf("Bloomfilter should contain: %s", testData)
+	}
+}
+
 func Test_EmptySetAndDoesNotContain(t *testing.T) {
 	bf, err := New(WithSize(Parameters{filterSize, kSize}))
 	if err != nil {
@@ -77,6 +92,19 @@ func Test_EmptySetAndDoesNotContain(t *testing.T) {
 	testData := "I am not set in the Bloom filter"
 
 	if bf.Contains(testData) {
+		t.Fatalf("Bloomfilter should not contain: %s", testData)
+	}
+}
+
+func Test_EmptySetAndDoesNotContainBytes(t *testing.T) {
+	bf, err := New(WithSize(Parameters{filterSize, kSize}))
+	if err != nil {
+		t.Fatal("failed to initialize bloomfitler")
+	}
+
+	testData := []byte("I am not set in the Bloom filter")
+
+	if bf.ContainsBytes(testData) {
 		t.Fatalf("Bloomfilter should not contain: %s", testData)
 	}
 }
@@ -247,5 +275,123 @@ func Test_missingM(t *testing.T) {
 
 	if err.Error() != "bloomfilter initialized without filtersize (m)" {
 		t.Fatalf("New returned an invalid error: %v", err)
+	}
+}
+
+// Expected values are computed independently of the implementation, from:
+//
+//	e = lambda + log2(clientItems)
+//	m = ceil(serverItems * e / ln2)
+//	k = ceil(e)
+func Test_PSIParameters(t *testing.T) {
+	tests := []struct {
+		name                   string
+		server, client, lambda int
+		wantM, wantK           uint64
+	}{
+		{"design example: 2^20 vs 2^20, lambda 40", 1 << 20, 1 << 20, 40, 90766524, 60},
+		{"single client item: e equals lambda", 1000, 1, 40, 57708, 40},
+		{"non power of two client count", 1000, 1000, 40, 72086, 50},
+		{"k rounds up, not to nearest (e = 12.32)", 100, 5, 10, 1778, 13},
+		{"smallest valid input", 1, 1, 1, 2, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, k, err := psiParameters(tt.server, tt.client, tt.lambda)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if m != tt.wantM {
+				t.Errorf("m = %d, want %d", m, tt.wantM)
+			}
+			if k != tt.wantK {
+				t.Errorf("k = %d, want %d", k, tt.wantK)
+			}
+		})
+	}
+}
+
+func Test_PSIParametersRejectsInvalidInput(t *testing.T) {
+	tests := []struct {
+		name                   string
+		server, client, lambda int
+	}{
+		{"zero server items", 0, 1000, 40},
+		{"negative server items", -1, 1000, 40},
+		{"zero client items", 1000, 0, 40},
+		{"negative client items", 1000, -1, 40},
+		{"zero lambda", 1000, 1000, 0},
+		{"negative lambda", 1000, 1000, -5},
+		{"lambda too large", 1000, 1000, 1000},
+		{"filter too large to load", math.MaxInt, 1000, 40},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, _, err := psiParameters(tt.server, tt.client, tt.lambda); err == nil {
+				t.Errorf("expected an error for server=%d client=%d lambda=%d",
+					tt.server, tt.client, tt.lambda)
+			}
+		})
+	}
+}
+
+// The option must pass validation errors through New instead of
+// producing a filter with zero or nonsensical parameters.
+func Test_WithPSISizeReturnsError(t *testing.T) {
+	bf, err := New(ForPSI(0, 1000, 40), WithHasher(NewMurmur3Hasher()))
+	if err == nil {
+		t.Fatal("expected New to return an error")
+	}
+	if bf != nil {
+		t.Fatal("expected a nil filter on error")
+	}
+}
+
+// Behavioral check with a small lambda, so false positives are frequent
+// enough to measure. If the sizing is right here, it is right at lambda 40.
+//
+// With clientItems = 1 the per-query target is exactly 2^-lambda.
+func Test_PSISizingMeetsTargetRate(t *testing.T) {
+	const (
+		serverItems = 10000
+		lambda      = 8
+		queries     = 200000
+	)
+
+	bf, err := New(ForPSI(serverItems, 1, lambda), WithHasher(NewMurmur3Hasher()))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	for i := range serverItems {
+		bf.Add(fmt.Sprintf("server-%d", i))
+	}
+
+	fpCount := 0
+	for i := range queries {
+		if bf.Contains(fmt.Sprintf("query-%d", i)) {
+			fpCount++
+		}
+	}
+
+	target := math.Pow(2, -lambda)
+	measured := float64(fpCount) / float64(queries)
+
+	// The rounding (ceil of m and k) should never make the filter worse than
+	// the target, so check the theoretical rate of the actual m and k first.
+	n := float64(serverItems)
+	k := float64(bf.kSize)
+	m := float64(bf.mSize)
+	expected := math.Pow(1-math.Exp(-k*n/m), k)
+	if expected > target {
+		t.Fatalf("theoretical rate %.5f%% exceeds target %.5f%% (m=%d, k=%d)",
+			expected*100, target*100, bf.mSize, bf.kSize)
+	}
+
+	sigma := math.Sqrt(expected * (1 - expected) / float64(queries))
+	if math.Abs(measured-expected) > 5*sigma {
+		t.Fatalf("false positive rate %.4f%% (%d/%d), expected %.4f%% ± %.4f%% (m=%d, k=%d)",
+			measured*100, fpCount, queries, expected*100, 5*sigma*100, bf.mSize, bf.kSize)
 	}
 }
